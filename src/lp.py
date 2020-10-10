@@ -28,6 +28,8 @@ import requests
 import json
 import os
 import re
+import time
+import random
 
 
 OAUTH_SIGNATURE_METHOD = 'PLAINTEXT'
@@ -35,7 +37,7 @@ OAUTH_SIGNATURE = '&'
 REQUEST_TOKEN_URL = 'https://launchpad.net/+request-token'
 ACCESS_TOKEN_URL = 'https://launchpad.net/+access-token'
 
-url = 'https://api.launchpad.net/1.0/'
+URL = 'https://api.launchpad.net/1.0/'
 
 
 def access_token():
@@ -129,6 +131,41 @@ def check_config_dir():
     if not os.path.exists(config_dir):
         os.makedirs(config_dir) 
 
+def generate_nonce(length=8):
+    """Generate pseudorandom number."""
+    return ''.join([str(random.randint(0, 9)) for i in range(length)])
+
+
+def go_endpoint(endpoint):
+    config = get_config()
+    if not config['oauth_consumer_key']:
+        print('Set consumer key first')
+        return
+    if not config['oauth_token'] or not config['oauth_token_secret']:
+        print('Request token first')
+        return
+    params = {
+            'OAuth realm': 'https://api.launchpad.net/',
+            'oauth_consumer_key': config['oauth_consumer_key'],
+            'oauth_token': config['oauth_token'],
+            'oauth_signature_method': OAUTH_SIGNATURE_METHOD,
+            'oauth_signature': OAUTH_SIGNATURE + config['oauth_token_secret'],
+            'oauth_timestamp': str(int(time.time())),
+            'oauth_nonce': generate_nonce(),
+    }
+    authorization = ''
+    for key in params:
+        if authorization:
+            authorization += ',' 
+        authorization += '{}="{}"'.format(key, params[key])
+    headers = {'Accept': 'application/json',
+               'Authorization': authorization}
+    url = URL + endpoint
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        return r.content.decode()
+    return None
+
 
 def main():
     usage_msg = 'usage: %prog [options]'
@@ -158,6 +195,11 @@ def main():
                       dest='access_token',
                       default=False,
                       help='Get access token')
+    parser.add_option('-m', '--me',
+                      action='store_true',
+                      dest='me',
+                      default=False,
+                      help='Who am I?')
     (option, args) = parser.parse_args()
     if option.set_consumer_key:
         if option.key is False:
@@ -173,6 +215,10 @@ def main():
         return
     elif option.access_token:
         access_token()
+        return
+    elif option.me:
+        result = go_endpoint('people/+me')
+        print(result)
         return
     parser.print_help()
     exit()
