@@ -30,6 +30,7 @@ import os
 import re
 import time
 import random
+from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 
 OAUTH_SIGNATURE_METHOD = 'PLAINTEXT'
@@ -136,6 +137,46 @@ def generate_nonce(length=8):
     return ''.join([str(random.randint(0, 9)) for i in range(length)])
 
 
+def build(owner, ppa, source_name, version, to_serie):
+    config = get_config()
+    if not config['oauth_consumer_key']:
+        print('Set consumer key first')
+        return
+    if not config['oauth_token'] or not config['oauth_token_secret']:
+        print('Request token first')
+        return
+    params = {
+            'OAuth realm': 'https://api.launchpad.net/',
+            'oauth_consumer_key': config['oauth_consumer_key'],
+            'oauth_token': config['oauth_token'],
+            'oauth_signature_method': OAUTH_SIGNATURE_METHOD,
+            'oauth_signature': OAUTH_SIGNATURE + config['oauth_token_secret'],
+            'oauth_timestamp': str(int(time.time())),
+            'oauth_nonce': generate_nonce(),
+    }
+    authorization = ''
+    for key in params:
+        if authorization:
+            authorization += ',' 
+        authorization += '{}="{}"'.format(key, params[key])
+    archive = 'https://api.launchpad.net/1.0/~{}/+archive/ubuntu/{}'.format(
+            owner, ppa)
+    multipart_data = MultipartEncoder(fields={
+            'ws.op': 'syncSource',
+            'from_archive': archive,
+            'to_pocket': 'Release',
+            'source_name': source_name,
+            'to_series': to_serie,
+            'version': version,
+            'include_binaries': 'true'
+            })
+    headers = {'Accept': 'application/json',
+               'Content-Type': multipart_data.content_type,
+               'Authorization': authorization}
+    r = requests.post(archive, headers=headers, data=multipart_data)
+    return r.status_code == 200
+
+
 def go_endpoint(endpoint):
     config = get_config()
     if not config['oauth_consumer_key']:
@@ -170,11 +211,36 @@ def go_endpoint(endpoint):
 def main():
     usage_msg = 'usage: %prog [options]'
     parser = OptionParser(usage=usage_msg, add_help_option=False)
+    parser.add_option('-v', '--version',
+                      action='store',
+                      dest='version',
+                      default=False,
+                      help='Version')
+    parser.add_option('-u', '--ubuntu',
+                      action='store',
+                      dest='ubuntu',
+                      default=False,
+                      help='Ubuntu serie')
+    parser.add_option('-i', '--init',
+                      action='store',
+                      dest='init',
+                      default=False,
+                      help='Init source')
+    parser.add_option('-o', '--owner',
+                      action='store',
+                      dest='owner',
+                      default=False,
+                      help='Owner')
     parser.add_option('-c', '--consumer-key',
                       action='store',
                       dest='key',
                       default=False,
                       help='Consumer key')
+    parser.add_option('-d', '--distribution',
+                      action='store',
+                      dest='distribution',
+                      default=False,
+                      help='Distribution')
     parser.add_option('-s', '--set-consumer-key',
                       action='store_true',
                       dest='set_consumer_key',
@@ -195,11 +261,31 @@ def main():
                       dest='access_token',
                       default=False,
                       help='Get access token')
+    parser.add_option('-p', '--ppa',
+                      action='store',
+                      dest='ppa',
+                      default=False,
+                      help='PPA')
     parser.add_option('-m', '--me',
                       action='store_true',
                       dest='me',
                       default=False,
                       help='Who am I?')
+    parser.add_option('-f', '--files',
+                      action='store_true',
+                      dest='files',
+                      default=False,
+                      help='files')
+    parser.add_option('-b', '--build',
+                      action='store_true',
+                      dest='build',
+                      default=False,
+                      help='Build')
+    parser.add_option('-l', '--list',
+                      action='store_true',
+                      dest='list',
+                      default=False,
+                      help='List')
     (option, args) = parser.parse_args()
     if option.set_consumer_key:
         if option.key is False:
@@ -216,9 +302,28 @@ def main():
     elif option.access_token:
         access_token()
         return
+    elif option.distribution:
+        result = go_endpoint(option.distribution)
+        print(result)
+        return
     elif option.me:
         result = go_endpoint('people/+me')
         print(result)
+        return
+    elif option.build:
+        build(option.owner, option.ppa, option.init, option.version,
+              option.ubuntu)
+        return
+    elif option.list:
+        if option.owner:
+            if option.ppa:
+                result = go_endpoint('~{}/+archive/{}'.format(option.owner,
+                                                            option.ppa))
+            else:
+                result = go_endpoint('~{}/ppas'.format(option.owner))
+            print(result)
+        else:
+            print('Set owner')
         return
     parser.print_help()
     exit()
