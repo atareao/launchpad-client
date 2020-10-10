@@ -286,6 +286,11 @@ def main():
                       dest='list',
                       default=False,
                       help='List')
+    parser.add_option('-e', '--exists',
+                      action='store_true',
+                      dest='exists',
+                      default=False,
+                      help='Find builds')
     (option, args) = parser.parse_args()
     if option.set_consumer_key:
         if option.key is False:
@@ -314,6 +319,32 @@ def main():
         build(option.owner, option.ppa, option.init, option.version,
               option.ubuntu)
         return
+    elif option.exists:
+        if option.owner:
+            if option.ppa:
+                params = {'ws.op': 'getPublishedSources',
+                          'status': 'Published'}
+                if option.init:
+                    params['source_name'] = option.init
+                if option.version:
+                    params['version'] = option.version
+                if option.ubuntu:
+                    url = 'https://api.launchpad.net/1.0/ubuntu/{}'
+                    params['distro_series'] = url.format(option.ubuntu)
+                options = ['{}={}'.format(key, params[key]) for key in params]
+                endpoint = '~{}/+archive/{}?{}'.format(
+                        option.owner,
+                        option.ppa,
+                        '&'.join(options))
+                result = go_endpoint(endpoint)
+                print(result)
+            else:
+                print('Set PPA')
+        else:
+            print('Set owner')
+        return
+
+        
     elif option.list:
         if option.owner:
             if option.ppa:
