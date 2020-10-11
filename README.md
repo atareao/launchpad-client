@@ -73,6 +73,7 @@ sudo apt install launchpad-client
 <!-- start using -->
 ## Using <span id="project_title">Launchpad Client</span>
 
+```
 Usage: lp.py [options]
 
 Options:
@@ -99,6 +100,7 @@ Options:
   -b, --build           Build
   -l, --list            List
   -e, --exists          Find builds
+```
 <!-- end using -->
 
 <!-- start contributing -->
